@@ -2673,11 +2673,12 @@ class ManyToManyField(RelatedField):
     def set_attributes_from_rel(self):
         pass
 
-    def value_from_object(self, obj):
+    def get_field_value(self, model_instance, use_default=True):
         """
         Return the value of this field in the given model instance.
         """
-        return getattr(obj, self.attname).all()
+        qs = super(ManyToManyField, self).get_field_value(model_instance, use_default)
+        return qs.all()
 
     def save_form_data(self, instance, data):
         setattr(instance, self.attname, data)

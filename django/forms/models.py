@@ -136,19 +136,19 @@ def model_to_dict(instance, fields=None, exclude=None):
             continue
         if isinstance(f, ManyToManyField):
             # If the object doesn't have a primary key yet, just use an empty
-            # list for its m2m fields. Calling f.value_from_object will raise
+            # list for its m2m fields. Calling f.get_field_value will raise
             # an exception.
             if instance.pk is None:
                 data[f.name] = []
             else:
                 # MultipleChoiceWidget needs a list of pks, not object instances.
-                qs = f.value_from_object(instance)
+                qs = f.get_field_value(instance)
                 if qs._result_cache is not None:
                     data[f.name] = [item.pk for item in qs]
                 else:
                     data[f.name] = list(qs.values_list('pk', flat=True))
         else:
-            data[f.name] = f.value_from_object(instance)
+            data[f.name] = f.get_field_value(instance)
     return data
 
 
