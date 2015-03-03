@@ -2,6 +2,10 @@ import inspect
 import warnings
 
 
+class RemovedInDjango22Warning(PendingDeprecationWarning):
+    pass
+
+
 class RemovedInDjango21Warning(PendingDeprecationWarning):
     pass
 

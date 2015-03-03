@@ -678,7 +678,7 @@ class Field(RegisterLookupMixin):
         """
         Returns field's value just before saving.
         """
-        return getattr(model_instance, self.attname)
+        return self.get_field_value(model_instance, use_default=add)
 
     def get_prep_value(self, value):
         """
@@ -835,18 +835,19 @@ class Field(RegisterLookupMixin):
         first_choice = blank_choice if include_blank else []
         return first_choice + list(self.flatchoices)
 
+    @warn_about_renamed_method(
+        'Field', '_get_val_from_obj', 'Field.get_field_value()',
+        RemovedInDjango22Warning
+    )
     def _get_val_from_obj(self, obj):
-        if obj is not None:
-            return getattr(obj, self.attname)
-        else:
-            return self.get_default()
+        return self.get_field_value(obj, use_default=False)
 
     def value_to_string(self, obj):
         """
         Returns a string value of this field from the passed obj.
         This is used by the serialization framework.
         """
-        return smart_text(self._get_val_from_obj(obj))
+        return smart_text(self.get_field_value(obj, use_default=True))
 
     def _get_choices(self):
         if isinstance(self._choices, collections.Iterator):
@@ -908,11 +909,29 @@ class Field(RegisterLookupMixin):
             form_class = forms.CharField
         return form_class(**defaults)
 
+    @warn_about_renamed_method(
+        'Field', 'value_from_object', 'Field.get_field_value',
+        RemovedInDjango22Warning
+    )
     def value_from_object(self, obj):
+        assert False
+        return self.get_field_value(obj, use_default=False)
+
+    def get_field_value(self, model_instance, use_default=True):
         """
         Returns the value of this field in the given model instance.
         """
-        return getattr(obj, self.attname)
+        try:
+            return getattr(model_instance, self.attname)
+        except AttributeError as e:
+            # Use exception so that get_default is not called when we don't
+            # need it's value.
+            if use_default:
+                return self.get_default()
+            raise e
+
+    def set_field_value(self, model_instance, value):
+        setattr(model_instance, self.attname, value)
 
 
 class AutoField(Field):
@@ -1320,7 +1339,7 @@ class DateField(DateTimeCheckMixin, Field):
         return connection.ops.value_to_db_date(value)
 
     def value_to_string(self, obj):
-        val = self._get_val_from_obj(obj)
+        val = self.get_field_value(obj)
         return '' if val is None else val.isoformat()
 
     def formfield(self, **kwargs):
@@ -1480,7 +1499,7 @@ class DateTimeField(DateField):
         return connection.ops.value_to_db_datetime(value)
 
     def value_to_string(self, obj):
-        val = self._get_val_from_obj(obj)
+        val = self.get_field_value(obj)
         return '' if val is None else val.isoformat()
 
     def formfield(self, **kwargs):
@@ -1686,7 +1705,7 @@ class DurationField(Field):
         return converters + super(DurationField, self).get_db_converters(connection)
 
     def value_to_string(self, obj):
-        val = self._get_val_from_obj(obj)
+        val = self.get_field_value(obj)
         return '' if val is None else duration_string(val)
 
     def formfield(self, **kwargs):
@@ -2286,7 +2305,7 @@ class TimeField(DateTimeCheckMixin, Field):
         return connection.ops.value_to_db_time(value)
 
     def value_to_string(self, obj):
-        val = self._get_val_from_obj(obj)
+        val = self.get_field_value(obj)
         return '' if val is None else val.isoformat()
 
     def formfield(self, **kwargs):
@@ -2353,7 +2372,7 @@ class BinaryField(Field):
 
     def value_to_string(self, obj):
         """Binary data is serialized as base64"""
-        return b64encode(force_bytes(self._get_val_from_obj(obj))).decode('ascii')
+        return b64encode(force_bytes(self.get_field_value(obj))).decode('ascii')
 
     def to_python(self, value):
         # If it's a string, it should be base64-encoded data
