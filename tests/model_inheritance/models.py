@@ -142,6 +142,29 @@ class ParkingLot(Place):
         return "%s the parking lot" % self.name
 
 
+class InventoryItem(models.Model):
+    class Meta:
+        abstract = True
+
+    name = models.CharField(max_length=32)
+    price = models.CompositeField(fields=[
+        ('currency_code', models.CharField(max_length=3)),
+        ('amount', models.DecimalField(max_digits=20, decimal_places=4)),
+    ])
+
+
+class StockedItem(InventoryItem):
+    stock_location = models.CompositeField(fields=[
+        ('aisle_number', models.IntegerField()),
+        ('column_number', models.IntegerField()),
+        ('shelf_number', models.IntegerField())
+    ])
+    needs_replacement = models.BooleanField()
+
+
+class SaleItem(StockedItem):
+    discount_percent = models.SmallIntegerField()
+
 #
 # Abstract base classes with related models where the sub-class has the
 # same name in a different app and inherits from the same abstract base

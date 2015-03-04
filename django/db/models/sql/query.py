@@ -15,6 +15,7 @@ from string import ascii_uppercase
 from django.core.exceptions import FieldDoesNotExist, FieldError
 from django.db import DEFAULT_DB_ALIAS, connections
 from django.db.models.aggregates import Count
+
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.expressions import Col, Ref
 from django.db.models.query_utils import Q, PathInfo, refs_aggregate
@@ -1111,7 +1112,6 @@ class Query(object):
         # Work out the lookup type and remove it from the end of 'parts',
         # if necessary.
         value, lookups, used_joins = self.prepare_lookup_value(value, lookups, can_reuse, allow_joins)
-
         clause = self.where_class()
         if reffed_aggregate:
             condition = self.build_lookup(lookups, reffed_aggregate, value)
@@ -1143,13 +1143,13 @@ class Query(object):
         # the far end (fewer tables in a query is better).
         targets, alias, join_list = self.trim_joins(sources, join_list, path)
 
+        condition = None
         if hasattr(field, 'get_lookup_constraint'):
-            # For now foreign keys get special treatment. This should be
-            # refactored when composite fields lands.
-            condition = field.get_lookup_constraint(self.where_class, alias, targets, sources,
-                                                    lookups, value)
+            condition = field.get_lookup_constraint(
+                self, alias, targets, sources, lookups, value)
             lookup_type = lookups[-1]
-        else:
+
+        if not condition:
             assert(len(targets) == 1)
             if hasattr(targets[0], 'as_sql'):
                 # handle Expressions as annotations
@@ -1158,6 +1158,7 @@ class Query(object):
                 col = targets[0].get_col(alias, field)
             condition = self.build_lookup(lookups, col, value)
             lookup_type = condition.lookup_name
+
 
         clause.add(condition, AND)
 

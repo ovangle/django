@@ -7,6 +7,7 @@ from django.apps import AppConfig
 from django.apps.registry import Apps, apps as global_apps
 from django.conf import settings
 from django.db import models
+from django.db.models.fields.composite import Subfield
 from django.db.models.fields.proxy import OrderWrt
 from django.db.models.fields.related import (
     RECURSIVE_RELATIONSHIP_CONSTANT, do_pending_lookups,
@@ -324,6 +325,9 @@ class ModelState(object):
             if getattr(field, "rel", None) and exclude_rels:
                 continue
             if isinstance(field, OrderWrt):
+                continue
+            # FIXME: Why are we skipping this here?
+            if isinstance(field, Subfield):
                 continue
             name, path, args, kwargs = field.deconstruct()
             field_class = import_string(path)

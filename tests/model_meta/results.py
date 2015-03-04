@@ -5,6 +5,18 @@ TEST_RESULTS = {
         Person: [
             'baseperson_ptr',
             'baseperson_ptr_id',
+            'composite_field_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull',
+            'composite_field_base',
+            'composite_field_base__field_a',
+            'composite_field_base__field_b',
+            'composite_field_base__isnull',
+            'composite_field_concrete',
+            'composite_field_concrete__field_a',
+            'composite_field_concrete__field_b',
+            'composite_field_concrete__isnull',
             'content_type_abstract',
             'content_type_abstract_id',
             'content_type_base',
@@ -48,6 +60,14 @@ TEST_RESULTS = {
             'relating_person',
         ],
         BasePerson: [
+            'composite_field_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull',
+            'composite_field_base',
+            'composite_field_base__field_a',
+            'composite_field_base__field_b',
+            'composite_field_base__isnull',
             'content_type_abstract',
             'content_type_abstract_id',
             'content_type_base',
@@ -78,6 +98,10 @@ TEST_RESULTS = {
             'relating_baseperson'
         ],
         AbstractPerson: [
+            'composite_field_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull',
             'content_type_abstract',
             'content_type_abstract_id',
             'data_abstract',
@@ -118,17 +142,29 @@ TEST_RESULTS = {
             'data_not_concrete_abstract',
             'content_type_abstract_id',
             'object_id_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull',
             'data_base',
             'fk_base_id',
             'data_not_concrete_base',
             'content_type_base_id',
             'object_id_base',
+            'composite_field_base__field_a',
+            'composite_field_base__field_b',
+            'composite_field_base__isnull',
             'baseperson_ptr_id',
             'data_inherited',
             'fk_inherited_id',
             'data_not_concrete_inherited',
             'content_type_concrete_id',
             'object_id_concrete',
+            'composite_field_concrete__field_a',
+            'composite_field_concrete__field_b',
+            'composite_field_concrete__isnull',
+            'composite_field_concrete',
+            'composite_field_base',
+            'composite_field_abstract'
         ],
         BasePerson: [
             'id',
@@ -137,11 +173,19 @@ TEST_RESULTS = {
             'data_not_concrete_abstract',
             'content_type_abstract_id',
             'object_id_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull',
             'data_base',
             'fk_base_id',
             'data_not_concrete_base',
             'content_type_base_id',
             'object_id_base',
+            'composite_field_base__field_a',
+            'composite_field_base__field_b',
+            'composite_field_base__isnull',
+            'composite_field_base',
+            'composite_field_abstract'
         ],
         AbstractPerson: [
             'data_abstract',
@@ -149,6 +193,10 @@ TEST_RESULTS = {
             'data_not_concrete_abstract',
             'content_type_abstract_id',
             'object_id_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull',
+            'composite_field_abstract'
         ],
         Relating: [
             'id',
@@ -168,6 +216,9 @@ TEST_RESULTS = {
             'data_not_concrete_inherited',
             'content_type_concrete_id',
             'object_id_concrete',
+            'composite_field_concrete__field_a',
+            'composite_field_concrete__field_b',
+            'composite_field_concrete__isnull'
         ],
         BasePerson: [
             'id',
@@ -176,11 +227,17 @@ TEST_RESULTS = {
             'data_not_concrete_abstract',
             'content_type_abstract_id',
             'object_id_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull',
             'data_base',
             'fk_base_id',
             'data_not_concrete_base',
             'content_type_base_id',
             'object_id_base',
+            'composite_field_base__field_a',
+            'composite_field_base__field_b',
+            'composite_field_base__isnull'
         ],
         AbstractPerson: [
             'data_abstract',
@@ -188,6 +245,9 @@ TEST_RESULTS = {
             'data_not_concrete_abstract',
             'content_type_abstract_id',
             'object_id_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull'
         ],
         Relating: [
             'id',
@@ -206,6 +266,9 @@ TEST_RESULTS = {
             'fk_inherited_id',
             'content_type_concrete_id',
             'object_id_concrete',
+            'composite_field_concrete__field_a',
+            'composite_field_concrete__field_b',
+            'composite_field_concrete__isnull'
         ],
         BasePerson: [
             'id',
@@ -213,16 +276,25 @@ TEST_RESULTS = {
             'fk_abstract_id',
             'content_type_abstract_id',
             'object_id_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull',
             'data_base',
             'fk_base_id',
             'content_type_base_id',
             'object_id_base',
+            'composite_field_base__field_a',
+            'composite_field_base__field_b',
+            'composite_field_base__isnull'
         ],
         AbstractPerson: [
             'data_abstract',
             'fk_abstract_id',
             'content_type_abstract_id',
             'object_id_abstract',
+            'composite_field_abstract__field_a',
+            'composite_field_abstract__field_b',
+            'composite_field_abstract__isnull'
         ],
         Relating: [
             'id',
@@ -774,10 +846,13 @@ TEST_RESULTS = {
     'virtual_fields': {
         AbstractPerson: [
             'generic_relation_abstract',
+            'composite_field_abstract',
             'content_object_abstract',
         ],
         BasePerson: [
             'generic_relation_base',
+            'composite_field_abstract',
+            'composite_field_base',
             'content_object_base',
             'generic_relation_abstract',
             'content_object_abstract',
@@ -789,6 +864,9 @@ TEST_RESULTS = {
             'content_object_base',
             'generic_relation_abstract',
             'content_object_abstract',
+            'composite_field_abstract',
+            'composite_field_base',
+            'composite_field_concrete'
         ],
     },
 }

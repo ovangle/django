@@ -12,7 +12,7 @@ from django.utils import six
 from .models import (
     Base, Chef, CommonInfo, Copy, GrandChild, GrandParent, ItalianRestaurant,
     MixinModel, ParkingLot, Place, Post, Restaurant, Student, SubBase,
-    Supplier, Title, Worker,
+    Supplier, Title, Worker, InventoryItem, StockedItem, SaleItem
 )
 
 
@@ -129,6 +129,29 @@ class ModelInheritanceTests(TestCase):
     def test_mixin_init(self):
         m = MixinModel()
         self.assertEqual(m.other_attr, 1)
+
+    def test_abstract_with_composite_fields(self):
+
+        self.assertEqual(
+            [f.attname for f in InventoryItem._meta.fields],
+            ['name', 'price__currency_code', 'price__amount', 'price__isnull', 'price']
+        )
+        self.assertEqual(
+            [f.attname for f in StockedItem._meta.fields],
+            ['id', 'name', 'price__currency_code', 'price__amount',
+             'price__isnull', 'stock_location__aisle_number',
+             'stock_location__column_number', 'stock_location__shelf_number',
+             'stock_location__isnull', 'needs_replacement', 'stock_location',
+             'price',
+             ])
+        self.assertEqual(
+            [f.attname for f in SaleItem._meta.fields],
+            ['id', 'name', 'price__currency_code', 'price__amount',
+             'price__isnull', 'stock_location__aisle_number',
+             'stock_location__column_number', 'stock_location__shelf_number',
+             'stock_location__isnull', 'needs_replacement',
+             'stockeditem_ptr_id', 'discount_percent', 'stock_location', 'price'
+             ])
 
 
 class ModelInheritanceDataTests(TestCase):

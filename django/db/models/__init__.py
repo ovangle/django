@@ -12,6 +12,7 @@ from django.db.models.fields.files import FileField, ImageField  # NOQA
 from django.db.models.fields.related import (  # NOQA
     ForeignKey, ForeignObject, OneToOneField, ManyToManyField,
     ManyToOneRel, ManyToManyRel, OneToOneRel)
+from django.db.models.fields.composite import CompositeField    # NOQA
 from django.db.models.fields.proxy import OrderWrt  # NOQA
 from django.db.models.deletion import (  # NOQA
     CASCADE, PROTECT, SET, SET_NULL, SET_DEFAULT, DO_NOTHING, ProtectedError)

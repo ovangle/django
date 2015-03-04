@@ -35,6 +35,12 @@ class AbstractPerson(models.Model):
     # GR fields
     generic_relation_abstract = GenericRelation(Relation)
 
+    # COMPOSITE fields
+    composite_field_abstract = models.CompositeField(fields=[
+        ('field_a', models.CharField(max_length=32)),
+        ('field_b', models.CharField(max_length=32))
+    ])
+
     class Meta:
         abstract = True
 
@@ -65,6 +71,13 @@ class BasePerson(AbstractPerson):
     # GR fields
     generic_relation_base = GenericRelation(Relation)
 
+    # COMPOSITE fields
+    composite_field_base = models.CompositeField(fields=[
+        ('field_a', models.CharField(max_length=32)),
+        ('field_b', models.CharField(max_length=32))
+    ])
+
+
 
 class Person(BasePerson):
     # DATA fields
@@ -91,6 +104,12 @@ class Person(BasePerson):
 
     # GR fields
     generic_relation_concrete = GenericRelation(Relation)
+
+    # Composite fields
+    composite_field_concrete = models.CompositeField(fields=[
+        ('field_a', models.CharField(max_length=32)),
+        ('field_b', models.CharField(max_length=32))
+    ])
 
 
 class ProxyPerson(Person):

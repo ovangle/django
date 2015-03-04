@@ -100,6 +100,7 @@ class Options(object):
         self.verbose_name_plural = None
         self.db_table = ''
         self.ordering = []
+        # The options.Meta unique_together and index_together
         self.unique_together = []
         self.index_together = []
         self.select_on_save = False
@@ -508,6 +509,9 @@ class Options(object):
         forward or reverse field, unless many_to_many is specified; if it is,
         only forward fields will be returned.
 
+        If the field is specified as '%(field_name)__%(subfield_name)',
+        then the appropriate subfield will be returned
+
         The many_to_many argument exists for backwards compatibility reasons;
         it has been deprecated and will be removed in Django 2.0.
         """
@@ -533,6 +537,15 @@ class Options(object):
 
             return field
         except KeyError:
+            if isinstance(field_name, six.string_types) and '__' in field_name:
+                composite_name, subfield_name = field_name.split('__', 1)
+                try:
+                    field = self._forward_fields_map[composite_name]
+                    if field.is_composite:
+                        return field.get_subfield(subfield_name)
+                except KeyError:
+                    pass
+
             # If the app registry is not ready, reverse fields are
             # unavailable, therefore we throw a FieldDoesNotExist exception.
             if not self.apps.models_ready:
@@ -827,3 +840,7 @@ class Options(object):
         # Store result into cache for later access
         self._get_fields_cache[cache_key] = fields
         return fields
+
+
+
+

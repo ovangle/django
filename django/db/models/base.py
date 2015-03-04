@@ -23,6 +23,7 @@ from django.db.models.fields import AutoField
 from django.db.models.fields.related import (
     ForeignObjectRel, ManyToOneRel, OneToOneField, add_lazy_relation,
 )
+from django.db.models.fields.composite import Subfield
 from django.db.models.manager import ensure_default_manager
 from django.db.models.options import Options
 from django.db.models.query import Q
@@ -239,6 +240,9 @@ class ModelBase(type):
             else:
                 # .. and abstract ones.
                 for field in parent_fields:
+                    if isinstance(field, Subfield):
+                        # Subfields are copied by their composite field
+                        continue
                     new_field = copy.deepcopy(field)
                     new_class.add_to_class(field.name, new_field)
 

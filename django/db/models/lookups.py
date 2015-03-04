@@ -37,6 +37,10 @@ class RegisterLookupMixin(object):
         found = self._get_lookup(lookup_name)
         if found is None and hasattr(self, 'output_field'):
             return self.output_field.get_transform(lookup_name)
+        if found is None and hasattr(self, 'get_subfield'):
+            subfield = self.get_subfield(lookup_name)
+            if subfield:
+                return SubfieldTransform(subfield)
         if found is not None and not issubclass(found, Transform):
             return None
         return found
@@ -90,6 +94,24 @@ class Transform(RegisterLookupMixin):
     @cached_property
     def contains_aggregate(self):
         return self.lhs.contains_aggregate
+
+
+class SubfieldTransform(Transform):
+    def __init__(self, subfield):
+        self.subfield = subfield
+
+    def __call__(self, lhs, lookups):
+        assert (lookups and lookups[0] == self.subfield.name)
+        self.lhs = self.subfield.get_col(lhs.alias)
+        self.init_lookups = lookups[1:]
+        return self
+
+    def relabeled_clone(self, relabels):
+        transform = self.__class__(self.subfield)
+        return transform(self.lhs.relabeled_clone(relabels))
+
+    def as_sql(self, compiler, connection):
+        return self.lhs.as_sql(compiler, connection)
 
 
 class Lookup(RegisterLookupMixin):
@@ -522,3 +544,4 @@ default_lookups['regex'] = Regex
 class IRegex(Regex):
     lookup_name = 'iregex'
 default_lookups['iregex'] = IRegex
+

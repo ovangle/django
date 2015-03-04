@@ -1283,6 +1283,7 @@ class ForeignObjectRel(object):
     concrete = False
     editable = False
     is_relation = True
+    is_composite = False
 
     def __init__(self, field, to, related_name=None, related_query_name=None,
             limit_choices_to=None, parent_link=False, on_delete=None):
@@ -1759,9 +1760,11 @@ class ForeignObject(RelatedField):
         pathinfos = [PathInfo(from_opts, opts, (opts.pk,), self.rel, not self.unique, False)]
         return pathinfos
 
-    def get_lookup_constraint(self, constraint_class, alias, targets, sources, lookups,
+
+    def get_lookup_constraint(self, query, alias, targets, sources, lookups,
                               raw_value):
         from django.db.models.sql.where import SubqueryConstraint, AND, OR
+        constraint_class = query.where_class
         root_constraint = constraint_class()
         assert len(targets) == len(sources)
         if len(lookups) > 1:

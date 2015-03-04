@@ -20,6 +20,7 @@ from django import forms
 from django.core import exceptions, validators, checks
 from django.utils.datastructures import DictWrapper
 from django.utils.dateparse import parse_date, parse_datetime, parse_time, parse_duration
+from django.utils.deprecation import warn_about_renamed_method, RemovedInDjango22Warning
 from django.utils.duration import duration_string
 from django.utils.functional import cached_property, curry, total_ordering, Promise
 from django.utils.text import capfirst
@@ -97,7 +98,14 @@ class Field(RegisterLookupMixin):
     empty_strings_allowed = True
     empty_values = list(validators.EMPTY_VALUES)
 
-    # These track each time a Field instance is created. Used to retain order.
+    # These track each time a Field instance is created. Class attributes
+    # are unordered, but statements inside a class definition are executed
+    # sequentially, so a field appearing later in a class will have a higher
+    # creation counter.
+    #
+    # Once support for python 2.x is dropped, this can be accomplised more
+    # easily with ModelBase.__prepare__.
+    #
     # The auto_creation_counter is used for fields that Django implicitly
     # creates, creation_counter is used for all user-specified fields.
     creation_counter = 0
@@ -120,6 +128,7 @@ class Field(RegisterLookupMixin):
 
     # Field flags
     hidden = False
+    composite = False
 
     many_to_many = None
     many_to_one = None
@@ -169,6 +178,8 @@ class Field(RegisterLookupMixin):
         else:
             self.creation_counter = Field.creation_counter
             Field.creation_counter += 1
+        # The subfield creation counter is always > 0 on subfields
+        self.subfield_creation_counter = 0
 
         self._validators = validators  # Store for deconstruction later
 
@@ -425,14 +436,20 @@ class Field(RegisterLookupMixin):
                     keywords[name] = value
         # Work out path - we shorten it for known Django core fields
         path = "%s.%s" % (self.__class__.__module__, self.__class__.__name__)
-        if path.startswith("django.db.models.fields.related"):
-            path = path.replace("django.db.models.fields.related", "django.db.models")
-        if path.startswith("django.db.models.fields.files"):
-            path = path.replace("django.db.models.fields.files", "django.db.models")
-        if path.startswith("django.db.models.fields.proxy"):
-            path = path.replace("django.db.models.fields.proxy", "django.db.models")
-        if path.startswith("django.db.models.fields"):
-            path = path.replace("django.db.models.fields", "django.db.models")
+
+        field_modules = (
+            'django.db.models.fields.related',
+            'django.db.models.fields.files',
+            'django.db.models.fields.proxy',
+            'django.db.models.fields.composite',
+            'django.db.models.fields',
+        )
+
+        for module in field_modules:
+            if path.startswith(module):
+                path = path.replace(module, 'django.db.models')
+                break
+
         # Return basic info - other fields should override this.
         return (
             force_text(self.name, strings_only=True),
@@ -451,18 +468,28 @@ class Field(RegisterLookupMixin):
 
     def __eq__(self, other):
         # Needed for @total_ordering
-        if isinstance(other, Field):
-            return self.creation_counter == other.creation_counter
-        return NotImplemented
+        if not isinstance(other, Field):
+            return NotImplemented
+        return (
+            self.creation_counter == other.creation_counter and
+            self.subfield_creation_counter == other.subfield_creation_counter
+        )
 
     def __lt__(self, other):
         # This is needed because bisect does not take a comparison function.
-        if isinstance(other, Field):
-            return self.creation_counter < other.creation_counter
-        return NotImplemented
+        if not isinstance(other, Field):
+            return NotImplemented
+        lt = self.creation_counter < other.creation_counter
+        lt = lt or (
+            self.creation_counter == other.creation_counter and
+            self.subfield_creation_counter < other.subfield_creation_counter
+        )
+        return lt
 
     def __hash__(self):
-        return hash(self.creation_counter)
+        h = hash(self.creation_counter)
+        h = h * 37 + hash(self.subfield_creation_counter)
+        return h
 
     def __deepcopy__(self, memodict):
         # We don't have to deepcopy very much here, since most things are not
