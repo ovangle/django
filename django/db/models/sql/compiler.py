@@ -9,12 +9,19 @@ from django.db.models.query_utils import QueryWrapper, select_related_descend
 from django.db.models.sql.constants import (
     CURSOR, GET_ITERATOR_CHUNK_SIZE, MULTI, NO_RESULTS, ORDER_DIR, SINGLE,
 )
-from django.db.models.sql.datastructures import EmptyResultSet
+from django.db.models.sql.datastructures import EmptyResultSet, Selection
 from django.db.models.sql.query import Query, get_order_dir
 from django.db.transaction import TransactionManagementError
 from django.db.utils import DatabaseError
 from django.utils.deprecation import RemovedInDjango20Warning
 from django.utils.six.moves import zip
+
+
+def _extend_slice(li, iterable):
+    """ Extends the list with iterable and returns the slice that was added """
+    start = len(li)
+    li.extend(iterable)
+    return slice(start, len(li))
 
 
 class SQLCompiler(object):
@@ -36,7 +43,7 @@ class SQLCompiler(object):
     def setup_query(self):
         if all(self.query.alias_refcount[a] == 0 for a in self.query.tables):
             self.query.get_initial_alias()
-        self.select, self.klass_info, self.annotation_col_map = self.get_select()
+        self.select, self.klass_info = self.get_select()
         self.col_count = len(self.select)
 
     def pre_sql_setup(self):
@@ -106,8 +113,8 @@ class SQLCompiler(object):
         # Note that even if the group_by is set, it is only the minimal
         # set to group by. So, we need to add cols in select, order_by, and
         # having into the select in any case.
-        for expr, _, _ in select:
-            cols = expr.get_group_by_cols()
+        for selection in select:
+            cols = selection.expression.get_group_by_cols()
             for col in cols:
                 expressions.append(col)
         for expr, (sql, params, is_ref) in order_by:
@@ -181,33 +188,27 @@ class SQLCompiler(object):
         """
         select = []
         klass_info = None
-        annotations = {}
-        select_idx = 0
         for alias, (sql, params) in self.query.extra_select.items():
-            annotations[alias] = select_idx
-            select.append((RawSQL(sql, params), alias))
-            select_idx += 1
+            select.append(
+                Selection.of(RawSQL(sql, params), alias=alias, annotation=alias)
+            )
         assert not (self.query.select and self.query.default_cols)
         if self.query.default_cols:
-            select_list = []
-            for c in self.get_default_columns():
-                select_list.append(select_idx)
-                select.append((c, None))
-                select_idx += 1
+            added_fields = _extend_slice(select, self.get_default_columns())
             klass_info = {
                 'model': self.query.model,
-                'select_fields': select_list,
+                'select_fields': [added_fields, ]
             }
         # self.query.select is a special case. These columns never go to
         # any model.
         for col in self.query.select:
-            select.append((col, None))
-            select_idx += 1
+            select.append(Selection.of(col))
         for alias, annotation in self.query.annotation_select.items():
-            annotations[alias] = select_idx
-            select.append((annotation, alias))
-            select_idx += 1
+            select.append(Selection.of(
+                annotation, alias=alias, annotation=alias
+            ))
 
+        assert all(isinstance(s, Selection) for s in select)
         if self.query.select_related:
             related_klass_infos = self.get_related_selections(select)
             klass_info['related_klass_infos'] = related_klass_infos
@@ -219,11 +220,7 @@ class SQLCompiler(object):
                                                ki['select_fields'])
                     get_select_from_parent(ki)
             get_select_from_parent(klass_info)
-
-        ret = []
-        for col, alias in select:
-            ret.append((col, self.compile(col, select_format=True), alias))
-        return ret, klass_info, annotations
+        return [s.compile(self) for s in select], klass_info
 
     def get_order_by(self):
         """
@@ -324,7 +321,9 @@ class SQLCompiler(object):
             for expr, (sql, params, is_ref) in order_by:
                 without_ordering = self.ordering_parts.search(sql).group(1)
                 if not is_ref and (without_ordering, params) not in select_sql:
-                    extra_select.append((expr, (without_ordering, params), None))
+                    extra_select.append(
+                        Selection(expr, (without_ordering, params), None, None)
+                    )
         return extra_select
 
     def __call__(self, name):
@@ -397,7 +396,7 @@ class SQLCompiler(object):
 
             out_cols = []
             col_idx = 1
-            for _, (s_sql, s_params), alias in self.select + extra_select:
+            for _, (s_sql, s_params), alias, _ in self.select + extra_select:
                 if alias:
                     s_sql = '%s AS %s' % (s_sql, self.connection.ops.quote_name(alias))
                 elif with_col_aliases:
@@ -524,9 +523,7 @@ class SQLCompiler(object):
                 continue
             alias = self.query.join_parent_model(opts, model, start_alias,
                                                  seen_models)
-            column = field.get_col(alias)
-            result.append(column)
-        return result
+            yield Selection.of(field.get_col(alias))
 
     def get_distinct(self):
         """
@@ -698,15 +695,12 @@ class SQLCompiler(object):
                 'from_parent': False,
             }
             related_klass_infos.append(klass_info)
-            select_fields = []
             _, _, _, joins, _ = self.query.setup_joins(
                 [f.name], opts, root_alias)
             alias = joins[-1]
             columns = self.get_default_columns(start_alias=alias, opts=f.remote_field.model._meta)
-            for col in columns:
-                select_fields.append(len(select))
-                select.append((col, None))
-            klass_info['select_fields'] = select_fields
+            select_fields = _extend_slice(select, columns)
+            klass_info['select_fields'] = [select_fields, ]
             next_klass_infos = self.get_related_selections(
                 select, f.remote_field.model._meta, alias, cur_depth + 1, next, restricted)
             get_related_klass_infos(klass_info, next_klass_infos)
@@ -735,13 +729,10 @@ class SQLCompiler(object):
                     'from_parent': from_parent,
                 }
                 related_klass_infos.append(klass_info)
-                select_fields = []
                 columns = self.get_default_columns(
                     start_alias=alias, opts=model._meta, from_parent=opts.model)
-                for col in columns:
-                    select_fields.append(len(select))
-                    select.append((col, None))
-                klass_info['select_fields'] = select_fields
+                select_fields = _extend_slice(select, columns)
+                klass_info['select_fields'] = [select_fields, ]
                 next = requested.get(f.related_query_name(), {})
                 next_klass_infos = self.get_related_selections(
                     select, model._meta, alias, cur_depth + 1,

@@ -2,6 +2,7 @@
 Useful auxiliary data structures for query construction. Not useful outside
 the SQL domain.
 """
+from collections import namedtuple
 from django.db.models.sql.constants import INNER, LOUTER
 
 
@@ -139,3 +140,31 @@ class BaseTable(object):
 
     def relabeled_clone(self, change_map):
         return self.__class__(self.table_name, change_map.get(self.table_alias, self.table_alias))
+
+
+class Selection(namedtuple(
+    'Selection',
+    ('expression', 'sql', 'alias', 'annotation'))
+):
+    """
+    Metadata about a column in a SELECT clause
+    - expression: The expression that was used to generate the column
+    - sql: A tuple (sql, params) with the compiled expression
+    - alias: An alias for the column
+    - annotation: An optional annotation, containing information about how the
+    column in the result row should be treated specially
+    """
+    @classmethod
+    def of(cls, expression, alias=None, annotation=None):
+        return cls(expression, None, alias, annotation)
+
+    def compile(self, compiler):
+        """
+        Compiles the expression if necessary, populating the `sql` parameter
+        """
+        if self.sql is not None:
+            return self
+        sql, params = compiler.compile(self.expression, select_format=True)
+        return Selection(self.expression, (sql, params), self.alias, self.annotation)
+
+

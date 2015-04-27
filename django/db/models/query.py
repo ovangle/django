@@ -6,6 +6,7 @@ import copy
 import sys
 import warnings
 from collections import OrderedDict, deque
+from itertools import chain
 
 from django.conf import settings
 from django.core import exceptions
@@ -23,6 +24,7 @@ from django.db.models.query_utils import (
 )
 from django.db.models.sql.constants import CURSOR
 from django.utils import six, timezone
+from django.utils.six.moves import zip
 from django.utils.functional import partition
 from django.utils.version import get_version
 
@@ -38,6 +40,11 @@ class BaseIterator(object):
         self.queryset = queryset
 
 
+def get_projection(iterable, slices):
+    slices = sorted(slices, key=lambda s: s.start)
+    return chain.from_iterable(iterable[s] for s in slices)
+
+
 class ModelIterator(BaseIterator):
     """
     Iterator that yields a model instance for each row.
@@ -50,29 +57,35 @@ class ModelIterator(BaseIterator):
         # Execute the query. This will also fill compiler.select, klass_info,
         # and annotations.
         results = compiler.execute_sql()
-        select, klass_info, annotation_col_map = (compiler.select, compiler.klass_info,
-                                                  compiler.annotation_col_map)
+        select, klass_info = compiler.select, compiler.klass_info
+
         if klass_info is None:
             return
+
         model_cls = klass_info['model']
         select_fields = klass_info['select_fields']
-        model_fields_start, model_fields_end = select_fields[0], select_fields[-1] + 1
         init_list = [f[0].target.attname
-                     for f in select[model_fields_start:model_fields_end]]
+                     for f in get_projection(select, select_fields)]
+
         if len(init_list) != len(model_cls._meta.concrete_fields):
             init_set = set(init_list)
             skip = [f.attname for f in model_cls._meta.concrete_fields
                     if f.attname not in init_set]
             model_cls = deferred_class_factory(model_cls, skip)
+
         related_populators = get_related_populators(klass_info, select, db)
+
         for row in compiler.results_iter(results):
-            obj = model_cls.from_db(db, init_list, row[model_fields_start:model_fields_end])
+            obj = model_cls.from_db(
+                db, init_list, get_projection(row, select_fields)
+            )
             if related_populators:
                 for rel_populator in related_populators:
                     rel_populator.populate(row, obj)
-            if annotation_col_map:
-                for attr_name, col_pos in annotation_col_map.items():
-                    setattr(obj, attr_name, row[col_pos])
+
+            for selection, value in zip(select, row):
+                if selection.annotation is not None:
+                    setattr(obj, selection.annotation, value)
 
             # Add the known related objects to the model, if there are any
             if queryset._known_related_objects:
@@ -1591,17 +1604,16 @@ class RelatedPopulator(object):
         self.db = db
         # Pre-compute needed attributes. The attributes are:
         #  - model_cls: the possibly deferred model class to instantiate
-        #  - either:
-        #    - cols_start, cols_end: usually the columns in the row are
-        #      in the same order model_cls.__init__ expects them, so we
-        #      can instantiate by model_cls(*row[cols_start:cols_end])
+        #  - select_fields: The projection of the row that is required to
+        #    populate the current object
+        #  - maybe:
         #    - reorder_for_init: When select_related descends to a child
         #      class, then we want to reuse the already selected parent
         #      data. However, in this case the parent data isn't necessarily
         #      in the same order that Model.__init__ expects it to be, so
-        #      we have to reorder the parent data. The reorder_for_init
-        #      attribute contains a function used to reorder the field data
-        #      in the order __init__ expects it.
+        #      we have to reorder the parent data. The reorder_for_init function
+        #      contains the necessary data to reorder the data in the projection
+        #      of the row correctly
         #  - pk_idx: the index of the primary key field in the reordered
         #    model data. Used to check if a related object exists at all.
         #  - init_list: the field attnames fetched from the database. For
@@ -1612,13 +1624,13 @@ class RelatedPopulator(object):
         #  - cache_name, reverse_cache_name: the names to use for setattr
         #    when assigning the fetched object to the from_obj. If the
         #    reverse_cache_name is set, then we also set the reverse link.
-        select_fields = klass_info['select_fields']
+        self.select_fields = klass_info['select_fields']
         from_parent = klass_info['from_parent']
+
         if not from_parent:
-            self.cols_start = select_fields[0]
-            self.cols_end = select_fields[-1] + 1
             self.init_list = [
-                f[0].target.attname for f in select[self.cols_start:self.cols_end]
+                f[0].target.attname
+                for f in get_projection(select, self.select_fields)
             ]
             self.reorder_for_init = None
         else:
@@ -1626,16 +1638,16 @@ class RelatedPopulator(object):
                 f.attname for f in klass_info['model']._meta.concrete_fields
             ]
             reorder_map = []
-            for idx in select_fields:
-                field = select[idx][0].target
+            for idx, selection in enumerate(get_projection(select, self.select_fields)):
+                field = selection.expression.target
                 init_pos = model_init_attnames.index(field.attname)
                 reorder_map.append((init_pos, field.attname, idx))
             reorder_map.sort()
             self.init_list = [v[1] for v in reorder_map]
             pos_list = [row_pos for _, _, row_pos in reorder_map]
 
-            def reorder_for_init(row):
-                return [row[row_pos] for row_pos in pos_list]
+            def reorder_for_init(obj_data):
+                return [obj_data[row_pos] for row_pos in pos_list]
             self.reorder_for_init = reorder_for_init
 
         self.model_cls = self.get_deferred_cls(klass_info, self.init_list)
@@ -1664,10 +1676,11 @@ class RelatedPopulator(object):
         return model_cls
 
     def populate(self, row, from_obj):
+        related_data = list(get_projection(row, self.select_fields))
         if self.reorder_for_init:
-            obj_data = self.reorder_for_init(row)
+            obj_data = self.reorder_for_init(related_data)
         else:
-            obj_data = row[self.cols_start:self.cols_end]
+            obj_data = related_data
         if obj_data[self.pk_idx] is None:
             obj = None
         else:
